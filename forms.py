@@ -1,7 +1,9 @@
 from datetime import datetime
+from wsgiref.validate import validator
 from flask_wtf import Form
 from wtforms import StringField, SelectField, SelectMultipleField, DateTimeField, BooleanField
-from wtforms.validators import DataRequired, AnyOf, URL
+from wtforms.validators import DataRequired, AnyOf, URL, Optional, Regexp
+from enum import Enum
 
 class ShowForm(Form):
     artist_id = StringField(
@@ -83,13 +85,16 @@ class VenueForm(Form):
         'address', validators=[DataRequired()]
     )
     phone = StringField(
-        'phone'
+        'phone', validators=[
+            Optional(),
+            Regexp('^[0-9]{3}-[0-9]{3}-[0-9]{4}$', message="invalid phone number")
+        ]
     )
     image_link = StringField(
         'image_link'
     )
     genres = SelectMultipleField(
-        # TODO implement enum restriction
+        
         'genres', validators=[DataRequired()],
         choices=[
             ('Alternative', 'Alternative'),
@@ -114,10 +119,10 @@ class VenueForm(Form):
         ]
     )
     facebook_link = StringField(
-        'facebook_link', validators=[URL()]
+        'facebook_link', validators=[Optional(), URL()]
     )
     website_link = StringField(
-        'website_link'
+        'website_link', validators=[Optional(), URL()]
     )
 
     seeking_talent = BooleanField( 'seeking_talent' )
@@ -192,8 +197,9 @@ class ArtistForm(Form):
         ]
     )
     phone = StringField(
-        # TODO implement validation logic for state
-        'phone'
+        'phone', validators=[
+         Optional(),
+        Regexp('^[0-9]{3}-[0-9]{3}-[0-9]{4}$', message="invalid phone number")]
     )
     image_link = StringField(
         'image_link'
@@ -224,11 +230,11 @@ class ArtistForm(Form):
      )
     facebook_link = StringField(
         # TODO implement enum restriction
-        'facebook_link', validators=[URL()]
+        'facebook_link', validators=[Optional(), URL()]
      )
 
     website_link = StringField(
-        'website_link'
+        'website_link', validators=[Optional(), URL()]
      )
 
     seeking_venue = BooleanField( 'seeking_venue' )
