@@ -8,6 +8,10 @@
   },
   "author": "",
   "license": "ISC",
+  "engines": {
+    "node": "16.14.1",
+    "python": "3.10"
+  },  
   "dependencies": {
     "bootstrap": "^3.4.1"
   }
