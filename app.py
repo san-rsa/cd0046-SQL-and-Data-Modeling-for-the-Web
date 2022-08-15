@@ -114,16 +114,18 @@ def search_venues():
 
   try:
       
-    search_result = db.session.query(Venue.id, Venue.name).filter_by(name=text).all()
+    search_result = Venue.query.filter(Venue.name.ilike(f"%{text}%")).all()
 
     for result in search_result:
         data.append({
-          "id": Venue.id,
-          "name": result.name
+          "id": result.id,
+          "name": result.name,
+          "num_upcoming_shows": len((db.session.query(Show).filter(Show.venue_id == result.id).filter(Show.start_time > datetime.now()).all()
+           )),
         })
         response = {
           "data":data,
-          "count": len(search_result)
+          "count": len(data)
         }
 
   except:
@@ -141,35 +143,68 @@ def show_venue(venue_id):
   # shows the venue page with the given venue_id
   # TODO: replace with real venue data from the venues table, using venue_id
 
-  data = Venue.query.get(venue_id)
+  venue = Venue.query.get(venue_id)
+
+
+  if not venue:
+    flash("This venue does not exist.")
+    return render_template("errors/404.html")
   
     
-  upcoming_shows_query =db.session.query(Show).join(Venue).filter(Show.artist_id==venue_id).filter(Show.start_time>datetime.now()).all()
-  past_shows_query = past_shows_query = db.session.query(Show).join(Venue).filter(Show.artist_id==venue_id).filter(Show.start_time>datetime.now()).all()
-
+  upcoming_shows_query = db.session.query(Show).join(Artist).filter(Show.venue_id == venue_id).filter(Show.start_time > datetime.now()).all()
+  past_shows_query = db.session.query(Show).join(Artist).filter(Show.venue_id == venue_id).filter(Show.start_time < datetime.now()).all()
+ 
   upcoming_shows= []
-
+  upcoming_shows_num = set([])
   past_shows= []
-
-  for shows in upcoming_shows_query:
-    upcoming_shows.append({
-   
-      "venue_id" : shows.id,
-      "venue_name" : shows.name,
-      "venue_image_link" : shows.image_link,
-      "start_time" : Show.start_time
-    })
-  for shows in past_shows_query:
-    upcoming_shows.append({
-   
-      "venue_id" : shows.id,
-      "venue_name" : shows.name,
-      "venue_image_link" : shows.image_link,
-      "start_time" : Show.start_time
-    })
+  past_shows_num = set([])
 
 
 
+  for show in upcoming_shows_query:
+
+    upcoming_shows.append(
+            {
+                "artist_id": show.artist_id,
+                "artist_name": show.artist.name,
+                "artist_image_link": show.artist.image_link,
+                "start_time": show.start_time.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        )
+    upcoming_shows_num.add(show.artist_id)
+
+
+
+  for show in past_shows_query:
+    past_shows.append(
+            {
+                "artist_id": show.artist_id,
+                "artist_name": show.artist.name,
+                "artist_image_link": show.artist.image_link,
+                "start_time": show.start_time.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        )
+    past_shows_num.add(show.artist_id)
+
+
+    data = {
+        "id": venue.id,
+        "name": venue.name,
+        "city": venue.city,
+        "state": venue.state,
+        "address": venue.address,
+        "genres": (venue.genres).split(","),
+        "phone": venue.phone,
+        "website": venue.website,
+        "facebook_link": venue.facebook_link,
+        "seeking_talent": venue.seeking_talent,
+        "seeking_description": venue.seeking_description,
+        "image_link": venue.image_link,
+        "upcoming_shows_count": len(upcoming_shows_num),
+        "upcoming_shows": upcoming_shows,
+        "past_shows_count": len(past_shows_num),
+        "past_shows": past_shows,
+    }  
 
 
 
@@ -239,15 +274,26 @@ def create_venue_submission():
 @app.route('/venues/<venue_id>', methods=['DELETE'])
 def delete_venue(venue_id):
   # TODO: Complete this endpoint for taking a venue_id, and using
-  venue = db.session.query.get(Venue.id).first()
+    error = False
+    try:
+        venue = Venue.query.get(venue_id)
+        venueName = venue.name
+        venue.delete()
+    except:
+        error = True
+        db.session.rollback()
+        print(sys.exc_info())
+    finally:
+        db.session.close()
 
-  db.session.delete(venue)
-  db.session.cpmmit()
-  # SQLAlchemy ORM to delete a record. Handle cases where the session commit could fail.
+    # BONUS CHALLENGE: Implement a button to delete a Venue on a Venue Page, have it so that
+    # clicking that button delete it from the db then redirect the user to the homepage
+    if error:
+        flash(f"{venueName} venue could not be deleted.")
+    else:
+        flash(f"{venueName} venue has been successfully deleted.")
+    return render_template("pages/home.html")
 
-  # BONUS CHALLENGE: Implement a button to delete a Venue on a Venue Page, have it so that
-  # clicking that button delete it from the db then redirect the user to the homepage
-  return None
 
 #  Artists
 #  ----------------------------------------------------------------
@@ -266,17 +312,19 @@ def search_artists():
   data = []
   text = request.form['search_term']
   # TODO: implement search on artists with partial string search. Ensure it is case-insensitive.
-  search_artist = db.session.query(Artist.id, Artist.name).filter_by(name=text).all()
+  search_artist = Artist.query.filter(Artist.name.ilike(f"%{text}%")).all()
 
   try:
      for result in search_artist:
       data.append({
       "id": result.id,
-      "name": result.name
+      "name": result.name,
+      "num_upcoming_shows": len((db.session.query(Show).filter(Show.artist_id == result.id).filter(Show.start_time > datetime.now()).all()
+                    )),
     })
       response = {
       "data":data,
-      "count": len(search_artist)
+      "count": len(data)
     }
   except:
     error = True
@@ -300,31 +348,55 @@ def show_artist(artist_id):
 
   artist = Artist.query.get(artist_id)
 
-  upcoming_shows_query =db.session.query(Venue).join(Show).filter(Show.artist_id==Venue.id).filter(Show.start_time>datetime.now()).all()
-  past_shows_query =  db.session.query(Venue).join(Show).filter(Show.artist_id==Venue.id).filter(Show.start_time>datetime.now()).all()
+  if not artist:
+        flash("This artist does not exist.")
+        return render_template("errors/404.html")
 
+  upcoming_shows_query = db.session.query(Show).join(Venue).filter(Show.artist_id == artist_id).filter(Show.start_time > datetime.now()).all()
+  past_shows_query = db.session.query(Show).join(Venue).filter(Show.artist_id == artist_id).filter(Show.start_time < datetime.now()).all()
+  
   upcoming_shows= []
-
   past_shows= []
 
-  for shows in upcoming_shows_query:
-    upcoming_shows.append({
-   
-      "venue_id" : shows.id,
-      "venue_name" : shows.name,
-      "venue_image_link" : shows.image_link,
-      "start_time" : Show.start_time
-    })
-  for shows in past_shows_query:
-    upcoming_shows.append({
-   
-      "venue_id" : shows.id,
-      "venue_name" : shows.name,
-      "venue_image_link" : shows.image_link,
-      "start_time" : Show.start_time
-    })
+  for show in upcoming_shows_query:
+
+     upcoming_shows.append(
+            {
+                "venue_id": show.venue_id,
+                "venue_name": show.venue.name,
+                "venue_image_link": show.venue.image_link,
+                "start_time": show.start_time.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        )
+  for show in past_shows_query:
+    past_shows.append(
+            {
+                "venue_id": show.venue_id,
+                "venue_name": show.venue.name,
+                "venue_image_link": show.venue.image_link,
+                "start_time": show.start_time.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        )
+
+  data = {
+        "id": artist.id,
+        "name": artist.name,
+        "city": artist.city,
+        "state": artist.state,
+        "genres": (artist.genres).split(","),
+        "phone": artist.phone,
+        "website": artist.website,
+        "facebook_link": artist.facebook_link,
+        "seeking_venue": artist.seeking_venue,
+        "seeking_description": artist.seeking_description,
+        "image_link": artist.image_link,
+        "upcoming_shows_count": len(upcoming_shows),
+        "upcoming_shows": upcoming_shows,
+        "past_shows_count": len(past_shows),
+        "past_shows": past_shows,
+    }      
  
-  return render_template('pages/show_artist.html', artist=artist, upcoming_shows=upcoming_shows,past_shows=past_shows)
+  return render_template('pages/show_artist.html', artist=data,)
 
   # return render_template('pages/show_artist.html', artist=data)
 
@@ -529,21 +601,21 @@ def create_artist_submission():
 def shows():
   # displays list of shows at /shows
   # TODO: replace with real venues data.
-  shows = Show.query.all()
-  data = []
-  for show in shows:
-    show = ({
-        "venue_id" : show.venue_id,
-        "venue_name" : db.session.query(Venue.name).filter_by(id=show.venue_id).first()[0], 
-        "artist_id" : show.artist_id,
-        "artist_name" : db.session.query(Artist.name).filter_by(id=show.artist_id).first()[0], 
-        "artist_image_link" : db.session.query(Artist.image_link).filter_by(id=show.artist_id).first()[0], 
-        "start_time" : str(show.start_time)
-
-    })
+    data = []
+    for show in db.session.query(Show).join(Artist).join(Venue).all():
+        data.append(
+            {
+                "venue_id": show.venue_id,
+                "venue_name": show.venue.name,
+                "artist_id": show.artist_id,
+                "artist_name": show.artist.name,
+                "artist_image_link": show.artist.image_link,
+                "start_time": show.start_time.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        )
     data.append(show)
 
-  return render_template('pages/shows.html', shows=data)
+    return render_template('pages/shows.html', shows=data)
 
 @app.route('/shows/create')
 def create_shows():
@@ -613,10 +685,12 @@ if not app.debug:
 
 
 # Default port:
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()
 
-# if __name__ == '__main__':
-#     port = int(os.environ.get('PORT', 5000))
-#     app.run(host='0.0.0.0', port=port)
-
+# Or specify port manually:
+"""
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
+"""

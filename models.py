@@ -26,6 +26,9 @@ class Venue(db.Model):
     website_link  = db.Column(db.String()) 
     seeking_talent = db.Column(db.String()) # can't edit in boolean "not a boolean value true" 
     seeking_description = db.Column(db.String()) 
+    shows = db.relationship(
+        "Show", backref="venue", cascade="all, delete-orphan", lazy=True
+    ) 
     
     # shows = db.relationship('show', backref='venue', lazy=True)
     
@@ -44,6 +47,9 @@ class Artist(db.Model):
     website_link  = db.Column(db.String())  
     seeking_venue = db.Column(db.String()) # can't edit in boolean "not a boolean value true"
     seeking_description  = db.Column(db.String()) 
+    shows = db.relationship(
+        "Show", backref="artist", cascade="all, delete-orphan", lazy=True
+    )
     
     # shows = db.relationship('show', backref='artist', lazy=True)
     
